@@ -1,0 +1,276 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use diagnostics;
+use Date::Parse;
+use Getopt::Long;
+use Data::Dumper;
+
+# Boolean options
+my $debug=0;
+my $dryrun=0;
+my $from_scratch=0;
+my $help=0;
+my $quiet=0;
+my $rollback=0;
+my $auto=0;
+my $verbose=0;
+
+my $webuser = 'www-data';
+my $logfile = '/var/log/deploy.log';
+open(my $fh, '>>', $logfile) or die "Could not open file '$logfile' $!";
+
+my $date = `date +"%Y-%m-%d %H:%M:%S"`;
+chomp($date);
+
+sub log_msg
+{
+    my $message = $_[0];
+    if($quiet ne 1) { print $message."\n"; }
+    print $fh sprintf("%-17s -- %-20s", $date, $message."\n");
+}
+
+sub debug_msg
+{
+    my $message = $_[0];
+    if($debug == 1) { print $message."\n"; }
+}
+
+sub bail
+{
+    my $message = "Dying because ".$_[0]."\n";
+    log_msg($message);
+    print $message;
+    exit 1;
+}
+
+sub perform_and_log
+{
+    my $command = $_[0]."\n";
+    if($verbose == 1) { print "PERFORM: ".$command."\n"; }
+    $command;
+}
+
+sub exec_and_log
+{
+    my $command = $_[0]."\n";
+    if($verbose == 1) { print "EXEC: ".$command."\n"; }
+    `$command`;
+}
+
+# Required options
+my ($revision, $branch);
+my $deployDir = '/var/www/portal.csuglobal.edu';
+
+# String options
+my $comment='None';
+my $release_id='Unknown';
+my $remote_path='Unknown';
+my $timestamp_utc='Unknown';
+my $user_name='Unknown';
+my $user_email='Unknown';
+
+#-- prints usage if no command line parameters are passed or there is an unknown
+#   parameter or help option is passed
+GetOptions(
+    "path|p:s" => \$deployDir,
+    "revision|r=s" => \$revision,
+    "branch|b=s" => \$branch,
+
+    # Flags that I added because I might want them
+    "debug" => \$debug,
+    "dryrun" => \$dryrun,
+    "help" => \$help,
+    "quiet" => \$quiet,
+    "verbose" => \$verbose,
+
+    #Flags that are boolean, but beanstalk passes them in as integers
+    "from_scratch:i" => \$from_scratch,
+    "rollback:i" => \$rollback,
+    "auto:i" => \$auto,
+    
+    "comment:s" => \$comment,
+    "release_id:s" => \$release_id,
+    "remote_path:s" => \$remote_path,
+    "timestamp_utc:s" => \$timestamp_utc,
+    "user_name:s" => \$user_name,
+    "user_email:s" => \$user_email,
+    ) or show_usage();
+
+if($help) { show_usage_detail(); }
+    
+unless($deployDir) { die("Path is required\n"); }
+unless($branch) { die("Branch is required\n"); }
+unless($revision) { die("Revision is required\n"); }
+
+
+log_msg("$user_name deployed to $deployDir from $branch at $revision");
+
+if (-d $deployDir) {
+    log_msg "$deployDir exists";
+} else {
+    bail "$deployDir does not exist";
+}
+
+my $working_copy = $deployDir.'.gitrepo';
+
+if (-d $working_copy) {
+    log_msg "$working_copy exists";
+} else {
+    bail "$working_copy does not exist...";
+}
+
+perform_and_log "chdir $working_copy";
+exec_and_log "sudo -u $webuser git checkout ".$branch;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+exit 0;
+
+# ## FROM STAGING SCRIPT
+# ## FROM STAGING SCRIPT
+
+# chomp($branchName);
+
+# my $deployCommand = "sudo -u www-data /var/www/deploy";
+
+# unless($quiet) {
+#     print "================================================================================\n";
+#     print "=   Do you want to update $deployDir to HEAD and apply all migrations? \n";
+#     print "================================================================================\n";
+#     print "[y/n]?";
+
+#     my $input = <STDIN>;
+#     chomp($input);
+
+#     print "$deployCommand \n";
+#     print "$migrateCommand \n";
+
+#     if($input eq 'y') {
+# 	print "\nUpdating $deployDir...\n";
+#     } else {
+# 	print "\nFine then, I didn't want to deploy anything anyway...\n";
+# 	exit;
+#     }
+# }
+
+# chdir('/var/www/');
+# print `$deployCommand`;
+# chdir('/var/www/www.csug.int/protected/');
+# print `$migrateCommand`;
+
+# print `$deployerCommand`;
+# print `$branchCommand`;
+# print `$versionCommand`;
+# ## END FROM STAGING SCRIPT
+# ## END FROM STAGING SCRIPT
+
+# # my $branchName = $branch;
+# # if ($branchName eq "master") { $branchName = ''; }
+
+# # my $fetchCommand = "sudo -u www-data git fetch";
+# # my $checkoutCommand = "sudo -u www-data git checkout $branch";
+# # my $pullCommand = "/usr/bin/qupdate --path=$deployDir --quiet";
+
+# # # my $chownCommand = "sudo chown www-data:www-data -R $deployDir/";
+# # # my $versionCommand = "sudo echo '$date $branchName ' | sudo tee $deployDir/.version > /dev/null";
+# # # my $reloadCommand = "sudo service php5-fpm reload";
+
+# # print "================================================================================\n";
+# # print "=         Do you want to deploy $branch to $deployDir? \n";
+# # print "================================================================================\n";
+# # print "[y/n]?";
+
+
+# # my $input = <STDIN>;
+# # chomp($input);
+
+# # if($input eq 'y') {
+# #     print "\nDeploying $branch to $deployDir...\n";
+# # } else {
+# #     print "\nFine then, I didn't want to deploy anything anyway...\n";
+# #     exit;
+# # }
+
+# # chdir($deployDir);
+
+# # # Staging Deployment Script.
+# # # echo
+# # #....
+
+# # print "Fetching\n";
+# # if($verbose != 0) { print "$fetchCommand\n"; }
+# # if($dryrun == 0) { print `$fetchCommand`; }
+
+# # print "Checkouting\n";
+# # if($verbose != 0) { print "$checkoutCommand\n"; }
+# # if($dryrun == 0) { print `$checkoutCommand`; }
+
+# # print "Pulling\n";
+# # if($verbose != 0) { print "$pullCommand\n"; }
+# # if($dryrun == 0) { `$pullCommand`; }
+
+# # print "Chowning\n";
+# # if($verbose != 0) { print "$chownCommand\n"; }
+# # if($dryrun == 0) { `$chownCommand`; }
+
+# # print "Versioning\n";
+# # if($verbose != 0) { print "$versionCommand\n"; }
+# # if($dryrun == 0) { `$versionCommand`; }
+
+# # print "Reloading FPM\n";
+# # if($verbose != 0) { print "$reloadCommand\n"; }
+# # if($dryrun == 0) { `$reloadCommand`; }
+
+sub show_usage
+{
+    print "Unknown option: @_\n" if ( @_ );
+    print "Usage: $0 --path|p <PATH> --revision|r <REVISION> --branch|b <BRANCH> \n";
+    exit;
+}
+
+sub show_usage_detail
+{
+    print "Usage: \n    $0 -revision <REVISION> -branch <BRANCH> [OPTION]\n";
+    print "\nDescription:\n    Checkout portal website code from git and place in <PATH>\n";
+    print "\nRequired arguments: \n";
+    my $fmt = "   %-17s     %-20s\n";
+    printf($fmt,"-r, --revision", "Git revision hash");
+    printf($fmt,"-b, --branch", "Current git branch that is being deployed.");
+    print "\nOptional arguments: \n";    
+    printf($fmt,"-p, --path", "Path to the document root, default is /var/www/portal.csuglobal.edu ");
+    printf($fmt,"--debug", "Print debugging information");
+    printf($fmt,"--dryrun", "Don't actually do anything, just pretend to");
+    printf($fmt,"--from_scratch", "This will be a 1 or 0 depending on whether the deployment is from scratch or not.");
+    printf($fmt,"--help", "Print this help page");
+    printf($fmt,"--quiet", "Shut up already!");
+    printf($fmt,"--rollback", "This will be a 1 or 0 whether deployment is a rollback or not.");
+    printf($fmt,"--auto", "Substitutes 1 or 0 whether deployment was triggered automatically or manually.");
+    printf($fmt,"--comment", "Current deployment comment.");
+    printf($fmt,"--verbose", "Be more talkative, absolutely garrulous");
+    printf($fmt,"--release_id", "Unique ID for the triggered deployment.");
+    printf($fmt,"--remote_path", "Remote path from settings in a particular deployment server.");
+    printf($fmt,"--timestamp_utc", "Time when deployment was triggered in UNIX epoch format.");
+    printf($fmt,"--user_name", "Name of the user who triggered the deployment.");
+    printf($fmt,"--user_email", "Email address of the user who triggered the deployment.");
+    
+    exit;
+}
