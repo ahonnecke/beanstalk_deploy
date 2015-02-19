@@ -22,6 +22,8 @@ sub forcibly_recursively_remove;
 sub do_populate_dotfiles;
 sub demand_symlink_exists;
 sub demand_directory_exists;
+sub do_show_usage;
+sub do_show_usage_detail;
 
 # Boolean options
 my $debug=0;
@@ -80,9 +82,9 @@ GetOptions(
     "timestamp_utc:s" => \$timestamp_utc,
     "user_name:s" => \$user_name,
     "user_email:s" => \$user_email,
-    ) or show_usage();
+    ) or do_show_usage();
 
-if($help) { show_usage_detail(); }
+if($help) { do_show_usage_detail(); }
     
 unless($deployDir) { die("Path is required\n"); }
 unless($branch) { die("Branch is required\n"); }
