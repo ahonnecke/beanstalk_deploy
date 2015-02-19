@@ -1,12 +1,27 @@
 #!/usr/bin/perl
 
-use Cwd;
+use Cwd 'abs_path';
 use strict;
 use warnings;
 use diagnostics;
 use Date::Parse;
 use Getopt::Long;
 use Data::Dumper;
+
+sub log_msg;
+sub debug_msg;
+sub bail;
+sub eval_and_log;
+sub exec_and_log;
+sub sudo_and_log;
+sub do_populate_dotfiles;
+sub do_checkout;
+sub do_copy_git_directory_to_working_directory;
+sub do_remove_and_remake_docroot_symlink;
+sub do_remove_old_docroot;
+sub do_populate_dotfiles;
+sub do_check_working_copy_exists;
+sub do_check_deploy_dir_exists;
 
 # Boolean options
 my $debug=0;
@@ -25,40 +40,8 @@ open(my $fh, '>>', $logfile) or die "Could not open file '$logfile' $!";
 my $date = `date +"%Y-%m-%d %H:%M:%S"`;
 chomp($date);
 
-sub log_msg
-{
-    my $message = $_[0];
-    if($quiet ne 1) { print $message."\n"; }
-    print $fh sprintf("%-17s -- %-20s", $date, $message."\n");
-}
-
-sub debug_msg
-{
-    my $message = $_[0];
-    if($debug == 1) { print $message."\n"; }
-}
-
-sub bail
-{
-    my $message = "Dying because ".$_[0]."\n";
-    log_msg($message);
-    print $message;
-    exit 1;
-}
-
-sub eval_and_log
-{
-    my $command = $_[0]."\n";
-    if($verbose == 1) { print "EVAL: ".$command."\n"; }
-    eval $command;
-}
-
-sub exec_and_log
-{
-    my $command = $_[0]."\n";
-    if($verbose == 1) { print "EXEC: ".$command."\n"; }
-    `$command`;
-}
+my $filedate = `date +"%Y-%m-%d--%H.%M.%S"`;
+chomp($filedate);
 
 # Required options
 my ($revision, $branch);
@@ -106,152 +89,95 @@ unless($branch) { die("Branch is required\n"); }
 unless($revision) { die("Revision is required\n"); }
 
 
-log_msg("$user_name deployed to $deployDir from $branch at $revision");
+log_msg("$user_name deploying to $deployDir from $branch at $revision");
 
-if (-d $deployDir) {
-    log_msg "$deployDir exists";
-} else {
-    bail "$deployDir does not exist";
-}
-
+my $new_copy = $deployDir.'.'.$filedate;
 my $working_copy = $deployDir.'.gitrepo';
 
-if (-d $working_copy) {
-    log_msg "$working_copy exists";
-} else {
-    bail "$working_copy does not exist...";
+do_check_deploy_dir_exists;
+
+my $current_copy = abs_path(readlink($deployDir));
+log_msg "New Copy: $new_copy";
+log_msg "Current Copy: $current_copy";
+
+do_check_deploy_dir_exists;
+do_check_working_copy_exists;
+do_checkout;
+do_copy_git_directory_to_working_directory;
+do_remove_and_remake_docroot_symlink;
+do_remove_old_docroot;
+do_populate_dotfiles;
+
+sub do_check_deploy_dir_exists
+{
+    if (-l $deployDir) {
+        log_msg "$deployDir exists";
+    } else {
+        bail "$deployDir does not exist";
+    }
 }
 
-eval_and_log "chdir('$working_copy')";
+sub do_check_working_copy_exists
+{
+    if (-d $working_copy) {
+        log_msg "$working_copy exists";
+    } else {
+        bail "$working_copy does not exist...";
+    }
+}
 
-my $cwd = getcwd();
+sub do_checkout
+{
+    eval_and_log "chdir('$working_copy')";
 
-print $cwd;
+    sudo_and_log "git checkout ".$branch;
+    sudo_and_log "git pull origin ".$branch;
+    sudo_and_log "git checkout ".$revision;
+}
 
-exec_and_log "sudo -u $webuser git checkout ".$branch;
+sub do_copy_git_directory_to_working_directory {
+    log_msg "creating new directory to deploy to";;
+    sudo_and_log "cp -R $working_copy $new_copy";
+}
 
+sub do_remove_and_remake_docroot_symlink
+{
+    log_msg "removing symlink to old docroot";
+    sudo_and_log "rm $deployDir";
 
+    log_msg "creating symlnk that points at the newly created docroot";
+    sudo_and_log "ln -s $new_copy $deployDir";
 
+}
+sub do_remove_old_docroot
+{
+    log_msg "remove old docroot directory";
+    sudo_and_log "rm -rf $current_copy";
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-exit 0;
-
-# ## FROM STAGING SCRIPT
-# ## FROM STAGING SCRIPT
-
-# chomp($branchName);
-
-# my $deployCommand = "sudo -u www-data /var/www/deploy";
-
-# unless($quiet) {
-#     print "================================================================================\n";
-#     print "=   Do you want to update $deployDir to HEAD and apply all migrations? \n";
-#     print "================================================================================\n";
-#     print "[y/n]?";
-
-#     my $input = <STDIN>;
-#     chomp($input);
-
-#     print "$deployCommand \n";
-#     print "$migrateCommand \n";
-
-#     if($input eq 'y') {
-# 	print "\nUpdating $deployDir...\n";
-#     } else {
-# 	print "\nFine then, I didn't want to deploy anything anyway...\n";
-# 	exit;
-#     }
-# }
-
-# chdir('/var/www/');
-# print `$deployCommand`;
-# chdir('/var/www/www.csug.int/protected/');
-# print `$migrateCommand`;
-
-# print `$deployerCommand`;
-# print `$branchCommand`;
-# print `$versionCommand`;
-# ## END FROM STAGING SCRIPT
-# ## END FROM STAGING SCRIPT
-
-# # my $branchName = $branch;
-# # if ($branchName eq "master") { $branchName = ''; }
-
-# # my $fetchCommand = "sudo -u www-data git fetch";
-# # my $checkoutCommand = "sudo -u www-data git checkout $branch";
-# # my $pullCommand = "/usr/bin/qupdate --path=$deployDir --quiet";
-
-# # # my $chownCommand = "sudo chown www-data:www-data -R $deployDir/";
-# # # my $versionCommand = "sudo echo '$date $branchName ' | sudo tee $deployDir/.version > /dev/null";
-# # # my $reloadCommand = "sudo service php5-fpm reload";
-
-# # print "================================================================================\n";
-# # print "=         Do you want to deploy $branch to $deployDir? \n";
-# # print "================================================================================\n";
-# # print "[y/n]?";
-
-
-# # my $input = <STDIN>;
-# # chomp($input);
-
-# # if($input eq 'y') {
-# #     print "\nDeploying $branch to $deployDir...\n";
-# # } else {
-# #     print "\nFine then, I didn't want to deploy anything anyway...\n";
-# #     exit;
-# # }
-
-# # chdir($deployDir);
-
-# # # Staging Deployment Script.
-# # # echo
-# # #....
-
-# # print "Fetching\n";
-# # if($verbose != 0) { print "$fetchCommand\n"; }
-# # if($dryrun == 0) { print `$fetchCommand`; }
-
-# # print "Checkouting\n";
-# # if($verbose != 0) { print "$checkoutCommand\n"; }
-# # if($dryrun == 0) { print `$checkoutCommand`; }
-
-# # print "Pulling\n";
-# # if($verbose != 0) { print "$pullCommand\n"; }
-# # if($dryrun == 0) { `$pullCommand`; }
-
-# # print "Chowning\n";
-# # if($verbose != 0) { print "$chownCommand\n"; }
-# # if($dryrun == 0) { `$chownCommand`; }
-
-# # print "Versioning\n";
-# # if($verbose != 0) { print "$versionCommand\n"; }
-# # if($dryrun == 0) { `$versionCommand`; }
-
-# # print "Reloading FPM\n";
-# # if($verbose != 0) { print "$reloadCommand\n"; }
-# # if($dryrun == 0) { `$reloadCommand`; }
-
-sub show_usage
+sub do_populate_dotfiles
+{
+    log_msg "populating dotfiles";
+    sudo_and_log "echo 'production' > $deployDir/.environment";
+    sudo_and_log "echo '$revision' > $deployDir/.version";
+    sudo_and_log "echo '$branch' > $deployDir/.branch";
+    sudo_and_log "echo '$user_name' > $deployDir/.deployer";
+    sudo_and_log "echo '$user_email' > $deployDir/.deployer";
+    sudo_and_log "echo '$comment' > $deployDir/.comment";
+    sudo_and_log "echo '$rollback' > $deployDir/.rollback";
+    sudo_and_log "echo '$release_id' > $deployDir/.release_id";
+    sudo_and_log "echo '$timestamp_utc' > $deployDir/.timestamp_utc";
+    sudo_and_log "echo '$auto' > $deployDir/.auto";
+}
+    
+sub do_show_usage
 {
     print "Unknown option: @_\n" if ( @_ );
     print "Usage: $0 --path|p <PATH> --revision|r <REVISION> --branch|b <BRANCH> \n";
-    exit;
+    exit 0;
 }
 
-sub show_usage_detail
+sub do_show_usage_detail
 {
     print "Usage: \n    $0 -revision <REVISION> -branch <BRANCH> [OPTION]\n";
     print "\nDescription:\n    Checkout portal website code from git and place in <PATH>\n";
@@ -276,5 +202,47 @@ sub show_usage_detail
     printf($fmt,"--user_name", "Name of the user who triggered the deployment.");
     printf($fmt,"--user_email", "Email address of the user who triggered the deployment.");
     
-    exit;
+    exit 0;
 }
+
+sub log_msg
+{
+    my $message = $_[0]."\n";
+    if($quiet ne 1) { print $message; }
+    print $fh sprintf("%-17s -- %-20s", $date, $message);
+}
+
+sub debug_msg
+{
+    my $message = $_[0];
+    if($debug == 1) { print $message."\n"; }
+}
+
+sub bail
+{
+    my $message = "Dying because ".$_[0]."\n";
+    log_msg($message);
+    print $message;
+    exit 1;
+}
+
+sub eval_and_log
+{
+    my $command = $_[0]."\n";
+    if($verbose == 1) { print "EVAL: ".$command."\n"; }
+    return eval $command;
+}
+
+sub exec_and_log
+{
+    my $command = $_[0]."\n";
+    if($verbose == 1) { print "EXEC: ".$command."\n"; }
+    return `$command`;
+}
+
+sub sudo_and_log
+{
+    return exec_and_log("sudo -u $webuser ".$_[0]);
+}
+
+exit 0;
