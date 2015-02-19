@@ -20,8 +20,8 @@ sub do_copy_git_directory_to_working_directory;
 sub do_remove_and_remake_docroot_symlink;
 sub do_remove_old_docroot;
 sub do_populate_dotfiles;
-sub do_check_working_copy_exists;
-sub do_check_deploy_dir_exists;
+sub demand_symlink_exists;
+sub demand_directory_exists;
 
 # Boolean options
 my $debug=0;
@@ -88,47 +88,50 @@ unless($deployDir) { die("Path is required\n"); }
 unless($branch) { die("Branch is required\n"); }
 unless($revision) { die("Revision is required\n"); }
 
-
 log_msg("$user_name deploying to $deployDir from $branch at $revision");
 
 my $new_copy = $deployDir.'.'.$filedate;
 my $working_copy = $deployDir.'.gitrepo';
 
-do_check_deploy_dir_exists;
-
 my $current_copy = abs_path(readlink($deployDir));
 log_msg "New Copy: $new_copy";
 log_msg "Current Copy: $current_copy";
 
-do_check_deploy_dir_exists;
-do_check_working_copy_exists;
-do_checkout;
-do_copy_git_directory_to_working_directory;
-do_remove_and_remake_docroot_symlink;
-do_remove_old_docroot;
-do_populate_dotfiles;
+demand_symlink_exists($deployDir);
+demand_directory_exists($working_copy);
+do_checkout($branch, $revision);
+do_copy_git_directory_to_working_directory();
+do_remove_and_remake_docroot_symlink();
+do_remove_old_docroot();
+do_populate_dotfiles();
 exit 0;
 
-sub do_check_deploy_dir_exists
+sub demand_symlink_exists
 {
-    if (-l $deployDir) {
-        log_msg "$deployDir exists";
+    my $path = $_[0];
+    if (-l $path) {
+        log_msg "$path exists";
     } else {
-        bail "$deployDir does not exist";
+        bail "$path does not exist";
     }
 }
 
-sub do_check_working_copy_exists
+sub demand_directory_exists
 {
-    if (-d $working_copy) {
-        log_msg "$working_copy exists";
+    my $path = $_[0];
+    
+    if (-d $path) {
+        log_msg "$path exists";
     } else {
-        bail "$working_copy does not exist...";
+        bail "$path does not exist...";
     }
 }
 
 sub do_checkout
 {
+    my $branch = $_[0];
+    my $revision = $_[1];
+    
     eval_and_log "chdir('$working_copy')";
 
     sudo_and_log "git checkout ".$branch;
@@ -163,7 +166,7 @@ sub do_populate_dotfiles
     sudo_and_log "echo '$revision' > $deployDir/.version";
     sudo_and_log "echo '$branch' > $deployDir/.branch";
     sudo_and_log "echo '$user_name' > $deployDir/.deployer";
-    sudo_and_log "echo '$user_email' > $deployDir/.deployer";
+    sudo_and_log "echo '$user_email' > $deployDir/.user_email";
     sudo_and_log "echo '$comment' > $deployDir/.comment";
     sudo_and_log "echo '$rollback' > $deployDir/.rollback";
     sudo_and_log "echo '$release_id' > $deployDir/.release_id";
