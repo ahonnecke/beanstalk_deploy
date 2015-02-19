@@ -18,7 +18,7 @@ sub do_populate_dotfiles;
 sub do_checkout;
 sub do_copy_git_directory_to_working_directory;
 sub do_remove_and_remake_docroot_symlink;
-sub do_remove_old_docroot;
+sub forcibly_recursively_remove;
 sub do_populate_dotfiles;
 sub demand_symlink_exists;
 sub demand_directory_exists;
@@ -97,12 +97,18 @@ my $current_copy = abs_path(readlink($deployDir));
 log_msg "New Copy: $new_copy";
 log_msg "Current Copy: $current_copy";
 
+log_msg "confirm that required things exist";
 demand_symlink_exists($deployDir);
 demand_directory_exists($working_copy);
+
+log_msg "perform the actual checkout and linking";
 do_checkout($branch, $revision);
 do_copy_git_directory_to_working_directory();
 do_remove_and_remake_docroot_symlink();
-do_remove_old_docroot();
+
+log_msg "remove old docroot directory";
+forcibly_recursively_remove($current_copy);
+
 do_populate_dotfiles();
 exit 0;
 
@@ -153,10 +159,10 @@ sub do_remove_and_remake_docroot_symlink
     sudo_and_log "ln -s $new_copy $deployDir";
 
 }
-sub do_remove_old_docroot
+sub forcibly_recursively_remove
 {
-    log_msg "remove old docroot directory";
-    sudo_and_log "rm -rf $current_copy";
+    my $path = $_[0];
+    sudo_and_log "rm -rf $path";
 }
 
 sub do_populate_dotfiles
