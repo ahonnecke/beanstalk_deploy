@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 
+use Cwd;
 use strict;
 use warnings;
 use diagnostics;
@@ -45,11 +46,11 @@ sub bail
     exit 1;
 }
 
-sub perform_and_log
+sub eval_and_log
 {
     my $command = $_[0]."\n";
-    if($verbose == 1) { print "PERFORM: ".$command."\n"; }
-    $command;
+    if($verbose == 1) { print "EVAL: ".$command."\n"; }
+    eval $command;
 }
 
 sub exec_and_log
@@ -121,10 +122,13 @@ if (-d $working_copy) {
     bail "$working_copy does not exist...";
 }
 
-perform_and_log "chdir $working_copy";
+eval_and_log "chdir('$working_copy')";
+
+my $cwd = getcwd();
+
+print $cwd;
+
 exec_and_log "sudo -u $webuser git checkout ".$branch;
-
-
 
 
 
