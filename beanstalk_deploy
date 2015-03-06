@@ -24,6 +24,7 @@ sub demand_symlink_exists;
 sub demand_directory_exists;
 sub do_show_usage;
 sub do_show_usage_detail;
+sub do_mysql_migration;
 
 # Boolean options
 my $debug=0;
@@ -92,10 +93,13 @@ unless($deployDir) { die("Path is required\n"); }
 unless($branch) { die("Branch is required\n"); }
 unless($revision) { die("Revision is required\n"); }
 
-log_msg("$user_name deploying to $deployDir from $branch at $revision");
-
+#compound variables
+my $relative_migration_command = 'protected/yiic migrate up 1';
+my $absolute_migration_command = $deployDir.'/'.$relative_migration_command;
 my $new_copy = $deployDir.'.'.$filedate;
 my $working_copy = $deployDir.'.gitrepo';
+
+log_msg("$user_name deploying to $deployDir from $branch at $revision");
 
 my $current_copy = abs_path(readlink($deployDir));
 log_msg "New Copy: $new_copy";
@@ -113,7 +117,16 @@ do_remove_and_remake_docroot_symlink();
 log_msg "remove old docroot directory";
 forcibly_recursively_remove($current_copy);
 
+log_msg "Populating dotfiles";
 do_populate_dotfiles();
+
+if($migrate == 1) {
+    log_msg "Applying newly deployed migration classes";
+    do_mysql_migration();
+}
+
+restart_services();
+
 exit 0;
 
 sub demand_symlink_exists
@@ -258,4 +271,20 @@ sub exec_and_log
 sub sudo_and_log
 {
     return exec_and_log("sudo -u $webuser ".$_[0]);
+}
+
+sub do_mysql_migration
+{
+    my @lines = sudo_and_log($absolute_migration_command);
+
+    if($verbose == 1) {
+        print join("\n", @lines), "\n";
+    }
+}
+
+sub restart_services
+{
+    exec_and_log("sudo service lighttpd restart");
+    exec_and_log("sudo service php5-fpm restart");
+    exec_and_log("sudo service memcached restart");
 }
