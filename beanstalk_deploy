@@ -286,5 +286,4 @@ sub restart_services
 {
     exec_and_log("sudo service lighttpd restart");
     exec_and_log("sudo service php5-fpm restart");
-    exec_and_log("sudo service memcached restart");
 }
