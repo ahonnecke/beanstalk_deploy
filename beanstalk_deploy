@@ -25,6 +25,8 @@ sub demand_directory_exists;
 sub do_show_usage;
 sub do_show_usage_detail;
 sub do_mysql_migration;
+sub restart_cache_services;
+sub restart_web_services;
 
 # Boolean options
 my $debug=0;
@@ -36,6 +38,7 @@ my $rollback=0;
 my $auto=0;
 my $verbose=0;
 my $migrate=0;
+my $memcached=0;
 
 my $webuser = 'www-data';
 my $logfile = '/var/log/deploy.log';
@@ -73,12 +76,13 @@ GetOptions(
     "quiet" => \$quiet,
     "verbose" => \$verbose,
     "migrate" => \$migrate,
+    "memcached" => \$memcached,
 
     #Flags that are boolean, but beanstalk passes them in as integers
     "from_scratch:i" => \$from_scratch,
     "rollback:i" => \$rollback,
     "auto:i" => \$auto,
-    
+
     "comment:s" => \$comment,
     "release_id:s" => \$release_id,
     "remote_path:s" => \$remote_path,
@@ -88,13 +92,16 @@ GetOptions(
     ) or do_show_usage();
 
 if($help) { do_show_usage_detail(); }
-    
+
 unless($deployDir) { die("Path is required\n"); }
 unless($branch) { die("Branch is required\n"); }
 unless($revision) { die("Revision is required\n"); }
 
+my $memcached_status = `sudo service memcached status`;
+chomp($memcached_status);
+
 #compound variables
-my $relative_migration_command = 'protected/yiic migrate up 1';
+my $relative_migration_command = 'protected/yiic migrate up';
 my $absolute_migration_command = $deployDir.'/'.$relative_migration_command;
 my $new_copy = $deployDir.'.'.$filedate;
 my $working_copy = $deployDir.'.gitrepo';
@@ -125,7 +132,11 @@ if($migrate == 1) {
     do_mysql_migration();
 }
 
-restart_services();
+if($memcached == 1) {
+    restart_cache_services();
+}
+
+restart_web_services();
 
 exit 0;
 
@@ -142,7 +153,7 @@ sub demand_symlink_exists
 sub demand_directory_exists
 {
     my $path = $_[0];
-    
+
     if (-d $path) {
         log_msg "$path exists";
     } else {
@@ -154,7 +165,7 @@ sub do_checkout
 {
     my $branch = $_[0];
     my $revision = $_[1];
-    
+
     eval_and_log "chdir('$working_copy')";
 
     sudo_and_log "git checkout ".$branch;
@@ -196,7 +207,7 @@ sub do_populate_dotfiles
     sudo_and_log "echo '$timestamp_utc' > $deployDir/.timestamp_utc";
     sudo_and_log "echo '$auto' > $deployDir/.auto";
 }
-    
+
 sub do_show_usage
 {
     print "Unknown option: @_\n" if ( @_ );
@@ -212,7 +223,7 @@ sub do_show_usage_detail
     my $fmt = "   %-17s     %-20s\n";
     printf($fmt,"-r, --revision", "Git revision hash");
     printf($fmt,"-b, --branch", "Current git branch that is being deployed.");
-    print "\nOptional arguments: \n";    
+    print "\nOptional arguments: \n";
     printf($fmt,"-p, --path", "Path to the document root, default is /var/www/portal.csuglobal.edu ");
     printf($fmt,"--debug", "Print debugging information");
     printf($fmt,"--dryrun", "Don't actually do anything, just pretend to");
@@ -229,7 +240,7 @@ sub do_show_usage_detail
     printf($fmt,"--timestamp_utc", "Time when deployment was triggered in UNIX epoch format.");
     printf($fmt,"--user_name", "Name of the user who triggered the deployment.");
     printf($fmt,"--user_email", "Email address of the user who triggered the deployment.");
-    
+
     exit 0;
 }
 
@@ -275,6 +286,7 @@ sub sudo_and_log
 
 sub do_mysql_migration
 {
+    log_msg "Migrating up";
     my @lines = sudo_and_log($absolute_migration_command);
 
     if($verbose == 1) {
@@ -282,8 +294,20 @@ sub do_mysql_migration
     }
 }
 
-sub restart_services
+sub restart_web_services
 {
     exec_and_log("sudo service lighttpd restart");
     exec_and_log("sudo service php5-fpm restart");
+}
+
+sub restart_cache_services
+{
+    log_msg "Memcached Status:".$memcached_status;
+
+    if($memcached_status eq ' * memcached is running') {
+        log_msg "Restarting memcached";
+        exec_and_log("sudo service memcached restart");
+    } else {
+        log_msg "Not restarting memcached";
+    }
 }
