@@ -101,7 +101,7 @@ my $memcached_status = `sudo service memcached status`;
 chomp($memcached_status);
 
 #compound variables
-my $relative_migration_command = 'protected/yiic migrate up';
+my $relative_migration_command = 'protected/yiic migrate up --interactive=0';
 my $absolute_migration_command = $deployDir.'/'.$relative_migration_command;
 my $new_copy = $deployDir.'.'.$filedate;
 my $working_copy = $deployDir.'.gitrepo';
